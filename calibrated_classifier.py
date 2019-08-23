@@ -15,7 +15,7 @@ X, y = make_classification(n_samples=500000, n_features=20, n_classes=2, weights
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=0)
 
-def calibrated_fit(clf, X, y, n_splits=5, scoring="gini", threshold=.5, stratify=False, calibrated_probs=True):
+def calibrated_fit(clf, X, y, n_splits=5, scoring="gini", stratify=False, calibrated_probs=True):
     
     assert hasattr(clf, "predict_proba"), "Classifier has no attribute predict_proba."
 
