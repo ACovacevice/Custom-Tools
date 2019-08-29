@@ -6,10 +6,12 @@ from sklearn.calibration import CalibratedClassifierCV, calibration_curve
 from sklearn.model_selection import GridSearchCV, KFold, StratifiedKFold, train_test_split
 from sklearn.metrics import roc_auc_score, brier_score_loss, f1_score, recall_score, precision_score, accuracy_score
 from sklearn.linear_model import LogisticRegression
+from sklearn.cluster import KMeans
 
 import matplotlib.pyplot as plt
 
 import numpy as np
+import pandas as pd
 
 X, y = make_classification(n_samples=500000, n_features=20, n_classes=2, weights=[.01, .99])
 
@@ -134,3 +136,71 @@ best_clf = clf[np.array(scores["test"]).mean(axis=1).argmax()]
 # Plotting the calibration curve
 plot_calibration_curve(best_clf, X_test, y_test, y, estimator.__class__)
 plt.show()
+
+
+# Checking for consistency over time
+
+dataframe = pd.DataFrame({
+    "y": y_test, 
+    "score": (1000 * best_clf.predict_proba(X_test)[:, 1]).astype(int)
+})
+
+# Randomizing some time-related variable for demonstration purposes only
+dataframe["date"] = np.random.choice(range(201901, 201908, 1), size=len(frame))
+
+def verify_consistency(df, col, target, grouper, q=200, n=20):
+    
+    data = df.copy()
+    data["aux"] = pd.qcut(data[col], q=q, duplicates="drop")
+    grouped_aux = data.groupby(["aux", grouper]).agg({target: lambda x: 100 * x.sum() / len(x)})[::-1]
+
+    s = len(grouped_aux.index.levels[1])
+    buckets = grouped_aux.index.levels[0][::-1].tolist()
+    
+    data = pd.DataFrame(grouped_aux[target].values.reshape(-1, s))
+    
+    if not data.shape == (len(buckets), s):
+        return verify_consistency(df, col, target, grouper, q=(q-q//10), n=n)
+    
+    data["bucket"] = buckets
+    data = data.sort_values("bucket").reset_index(drop=True)
+    
+    clf = KMeans(random_state=0, n_clusters=n)
+    data["kmeans"] = clf.fit_predict(data.iloc[:, :-2], data["bucket"])
+    
+    for group in data["kmeans"].unique():
+        idx = np.where(data["kmeans"] == group)[0]
+        left = data.loc[idx, "bucket"].min().left
+        right = data.loc[idx, "bucket"].max().right
+        data.loc[idx, "new_bucket"] = pd.Interval(left, right)
+        
+    intervals = pd.IntervalIndex(sorted(data["new_bucket"].unique()))
+    
+    try:
+        frame["bucket"] = pd.cut(frame[col], bins=intervals)
+    except:
+        return verify_consistency(df, col, target, grouper, q=q, n=n-1)
+    
+    data = frame.groupby(["bucket", grouper]).agg({"y": lambda x: 100 * x.sum() / len(x)})
+    return data
+
+def plot_consistency(df):
+    
+    fig, ax = plt.subplots(1, 1, figsize=(6, 8))
+    labels = df.index.levels[1]
+    s = len(labels)
+
+    for n, (i, j) in enumerate(df.index):
+        if n % s == 0:
+            df.loc[i].plot(use_index=False, y="y", ax=ax, label=i, marker="o", logy=False)
+
+    ax.legend(title="Bucket", loc="upper right", bbox_to_anchor=(0.4, 0, 1, 1))        
+    ax.set_ylabel("Bad Rate (%)")
+    ax.set_xticklabels(labels)
+    plt.show()
+    
+# New dataframe with the most consistent score splits over time     
+df = verify_consistency(dataframe, "score", "y", "date")
+
+# Plotting split behavior with time
+plot_consistency(df)
