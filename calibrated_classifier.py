@@ -148,7 +148,13 @@ dataframe = pd.DataFrame({
 # Randomizing some time-related variable for demonstration purposes only
 dataframe["date"] = np.random.choice(range(201901, 201908, 1), size=len(frame))
 
-def verify_consistency(df, col, target, grouper, q=200, n=20):
+def is_ordered(intervals):
+    for i, j in zip(intervals[:-1], intervals[1:]):
+        if not (i.right == j.left and j > i):
+            return False
+    return True
+
+def verify_consistency(df, col, target, grouper, q=100, n=10):
     
     data = df.copy()
     data["aux"] = pd.qcut(data[col], q=q, duplicates="drop")
@@ -157,32 +163,30 @@ def verify_consistency(df, col, target, grouper, q=200, n=20):
     s = len(grouped_aux.index.levels[1])
     buckets = grouped_aux.index.levels[0][::-1].tolist()
     
-    data = pd.DataFrame(grouped_aux[target].values.reshape(-1, s))
+    bad_rates = pd.DataFrame(grouped_aux[target].values.reshape(-1, s))
     
-    if not data.shape == (len(buckets), s):
+    if bad_rates.shape != (len(buckets), s):
         return verify_consistency(df, col, target, grouper, q=(q-q//10), n=n)
     
-    data["bucket"] = buckets
-    data = data.sort_values("bucket").reset_index(drop=True)
+    bad_rates["bucket"] = buckets
+    bad_rates = bad_rates.sort_values("bucket").reset_index(drop=True)
     
     clf = KMeans(random_state=0, n_clusters=n)
-    data["kmeans"] = clf.fit_predict(data.iloc[:, :-2], data["bucket"])
+    bad_rates["kmeans"] = clf.fit_predict(bad_rates.iloc[:, :-2], bad_rates["bucket"])
     
-    for group in data["kmeans"].unique():
-        idx = np.where(data["kmeans"] == group)[0]
-        left = data.loc[idx, "bucket"].min().left
-        right = data.loc[idx, "bucket"].max().right
-        data.loc[idx, "new_bucket"] = pd.Interval(left, right)
+    intervals = []
+    
+    for group in bad_rates["kmeans"].unique():
+        idx = np.where(bad_rates["kmeans"] == group)[0]
+        left = bad_rates.loc[idx, "bucket"].min().left
+        right = bad_rates.loc[idx, "bucket"].max().right
+        intervals.append(pd.Interval(left, right))
         
-    intervals = pd.IntervalIndex(sorted(data["new_bucket"].unique()))
-    
-    try:
-        frame["bucket"] = pd.cut(frame[col], bins=intervals)
-    except:
+    if not is_ordered(intervals):
         return verify_consistency(df, col, target, grouper, q=q, n=n-1)
     
-    data = frame.groupby(["bucket", grouper]).agg({"y": lambda x: 100 * x.sum() / len(x)})
-    return data
+    data["bucket"] = pd.cut(data[col], bins=pd.IntervalIndex(intervals))
+    return data.groupby(["bucket", grouper]).agg({"y": lambda x: 100 * x.sum() / len(x)}), pd.IntervalIndex(intervals)
 
 def plot_consistency(df):
     
@@ -197,10 +201,10 @@ def plot_consistency(df):
     ax.legend(title="Bucket", loc="upper right", bbox_to_anchor=(0.4, 0, 1, 1))        
     ax.set_ylabel("Bad Rate (%)")
     ax.set_xticklabels(labels)
-    plt.show()
+    plt.show() 
     
 # New dataframe with the most consistent score splits over time     
-df = verify_consistency(dataframe, "score", "y", "date")
+df, intervals = verify_consistency(dataframe, "score", "y", "date")
 
 # Plotting split behavior with time
 plot_consistency(df)
