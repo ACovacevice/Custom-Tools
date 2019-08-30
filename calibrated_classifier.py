@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-X, y = make_classification(n_samples=500000, n_features=20, n_classes=2, weights=[.01, .99])
+X, y = make_classification(n_samples=500000, n_features=20, n_classes=2, weights=[.9, .1])
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=0)
 
