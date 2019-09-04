@@ -186,9 +186,9 @@ def verify_consistency(df, col, target, grouper, q=100, n=10):
         return verify_consistency(df, col, target, grouper, q=q, n=n-1)
     
     data["bucket"] = pd.cut(data[col], bins=pd.IntervalIndex(intervals))
-    return data.groupby(["bucket", grouper]).agg({"y": lambda x: 100 * x.sum() / len(x)}), pd.IntervalIndex(intervals)
+    return data.groupby(["bucket", grouper]).agg({target: lambda x: 100 * x.sum() / len(x)}), pd.IntervalIndex(intervals)
 
-def plot_consistency(df):
+def plot_consistency(df, target):
     
     fig, ax = plt.subplots(1, 1, figsize=(6, 8))
     labels = df.index.levels[1]
@@ -196,10 +196,11 @@ def plot_consistency(df):
 
     for n, (i, j) in enumerate(df.index):
         if n % s == 0:
-            df.loc[i].plot(use_index=False, y="y", ax=ax, label=i, marker="o", logy=False)
+            df.loc[i].plot(use_index=False, y=target, ax=ax, label=i, marker="o")
 
     ax.legend(title="Bucket", loc="upper right", bbox_to_anchor=(0.4, 0, 1, 1))        
     ax.set_ylabel("Bad Rate (%)")
+    ax.set_xticks(range(s))
     ax.set_xticklabels(labels)
     plt.show() 
     
@@ -207,4 +208,4 @@ def plot_consistency(df):
 df, intervals = verify_consistency(dataframe, "score", "y", "date")
 
 # Plotting split behavior with time
-plot_consistency(df)
+plot_consistency(df, "y")
