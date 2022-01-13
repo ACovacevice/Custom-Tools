@@ -50,3 +50,68 @@ class DeepSub:
         if len(self.__pats) == 1:
             return self.__pats[0].sub(self.repl, text)
         return self.__pats[self.__pos].sub(self.__sub, text)
+
+def reformat_abbreviations(text: str) -> str:
+    pattern = DeepSub(pattern1="((:?[A-Z]+\.)+)", pattern2=r"(\.)", repl="")
+    return pattern.sub(text)
+
+
+def replace_email(text: str, by: str = " ") -> str:
+    pattern = re.compile(
+        r"([A-Z0-9_.+-]+@[A-Z0-9-]+(?:\.[A-Z0-9-]+)+)", 
+        flags=2
+    )
+    return pattern.sub(by, text)
+
+
+def replace_url(text: str, by: str = " ") -> str:
+    pattern = re.compile(
+        r"(https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*))", 
+        flags=2
+    )
+    return pattern.sub(by, text)
+
+
+def replace_equation(text: str, by: str = "equacao") -> str:
+
+    def reduce_args(text):
+        cls = DeepSub(pattern1=r"(\([^\(\)]+\)|\{[^\{\}]+\}|\[[^\[\]]+\])+", repl="ARGS", flags=2)
+        result = cls.sub(text)
+        if result == text:
+            return text
+        return reduce_args(result)
+
+    def reduce_prod(text):
+        cls = DeepSub(pattern1=r"((:?[a-z0-9]+\s*[\*\^]+\s*[a-z0-9]+)+)", repl="PROD", flags=2)
+        result = cls.sub(text)
+        if result == text:
+            return text
+        return reduce_prod(result)
+
+    def reduce_div(text):
+        cls = DeepSub(pattern1=r"((:?[a-z0-9]+\s*[\/]+\s*[a-z0-9]+)+)", repl="DIV", flags=2)
+        result = cls.sub(text)
+        if result == text:
+            return text
+        return reduce_div(result)
+
+    def reduce_add(text):
+        cls = DeepSub(pattern1=r"((:?[a-z0-9]+\s*[\+\-]+\s*[a-z0-9]+)+)", repl="ADD", flags=2)
+        result = cls.sub(text)
+        if result == text:
+            return text
+        return reduce_add(result)
+
+    def reduce_equation(text):
+        cls = DeepSub(pattern1=r"((:?[a-z0-9]+\s*[><=]+\s*[a-z0-9]+)+)", repl=by, flags=2)
+        result = cls.sub(text)
+        if result == text:
+            return text
+        return reduce_equation(result)
+    
+    red_text = reduce_equation(reduce_add(reduce_div(reduce_prod(reduce_args(text)))))
+    
+    if by in red_text:
+        return red_text
+    
+    return text
