@@ -51,6 +51,7 @@ class DeepSub:
             return self.__pats[0].sub(self.repl, text)
         return self.__pats[self.__pos].sub(self.__sub, text)
 
+
 def reformat_abbreviations(text: str) -> str:
     pattern = DeepSub(pattern1="((:?[A-Z]+\.)+)", pattern2=r"(\.)", repl="")
     return pattern.sub(text)
