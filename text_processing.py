@@ -20,20 +20,22 @@ class DeepSub:
         Replacement for the final matches took place, replacing vowels in 'roupa' by '-'.
     """
     
-    def __init__(self, **kwargs) -> None:
+    def __init__(self, repl: str, flags: int = 0, **kwargs) -> None:
         """
         Args:
             pattern1, pattern2, ... (str): 
                 Regex patterns to lookout for (first is mandatory, rest is optional).
             repl (str): 
                 Replacement value for matches.
-                
+            flags (int, optional):
+                Flags to be passed to the regex engine. Defaults to 0.
         Obs.: One important thing is to encapsulate patterns within parentheses; otherwise, it may not work.        
         """
-        kwargs.update({k: re.compile(v, re.IGNORECASE) for k, v in kwargs.items() if k.startswith("pattern")})
+        kwargs.update({k: re.compile(v, flags) for k, v in kwargs.items() if k.startswith("pattern")})
         self.__dict__ = kwargs
         self.__pats = [kwargs[k] for k in sorted(kwargs.keys()) if k.startswith("pattern")]
         self.__pos = 0
+        self.repl = repl
 
     
     def __sub(self, match: re.Match) -> str:
