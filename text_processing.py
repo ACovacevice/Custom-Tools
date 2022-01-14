@@ -52,12 +52,41 @@ class DeepSub:
         return self.__pats[self.__pos].sub(self.__sub, text)
 
 
+def remove_bad_chars(text: str) -> str:
+    """Remove chars alien to Brazilian Portuguese."""
+    
+    symbols = "&#@=><\+\/\*\^"
+    symbols += ",\.;:!?_\-"
+    symbols += "\'\""
+    symbols += "\)\(\]\[\}\{"
+    symbols += "áâãàéêíóôõúç"
+    
+    chars = re.compile(
+        r"([^a-z\s0-9%s]+)" % symbols, flags=2
+    )
+    def _repl(match):
+        return chars.sub(" ",
+            norm("NFKD", match.groups()[0])
+            .encode("ascii", errors="ignore")
+            .decode("utf-8", errors="ignore"),
+        )    
+    return chars.sub(_repl, text)
+
+
 def reformat_abbreviations(text: str) -> str:
-    pattern = DeepSub(pattern1="((:?[A-Z]+\.)+)", pattern2=r"(\.)", repl="")
+    """Reformat abbreviations."""
+    pattern = DeepSub(pattern1="((:?[A-Z]+\.)+)", pattern2=r"(\.)", repl="", flags=0)
+    return pattern.sub(text)
+
+
+def reformat_float(text: str) -> str:
+    """Reformat float numbers."""
+    pattern = DeepSub(pattern1=r"([0-9]*[,\.]*[0-9]+)", pattern2=r"([,\.]+)", repl="", flags=2)
     return pattern.sub(text)
 
 
 def replace_email(text: str, by: str = " ") -> str:
+    """Replace emails."""
     pattern = re.compile(
         r"([A-Z0-9_.+-]+@[A-Z0-9-]+(?:\.[A-Z0-9-]+)+)", 
         flags=2
@@ -66,11 +95,37 @@ def replace_email(text: str, by: str = " ") -> str:
 
 
 def replace_url(text: str, by: str = " ") -> str:
+    """Replace URLs."""
     pattern = re.compile(
         r"(https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*))", 
         flags=2
     )
     return pattern.sub(by, text)
+
+
+def remove_repetitions(text: str) -> str:
+    """Remove repeating tokens in succession."""
+    # Removes repetitions of non-alphanumerical chars.
+    sub = DeepSub(pattern1=r"([^a-záâãàéêíóôõúç0-9\s])\1+", repl=r"\1", flags=2)
+    text = sub.sub(text)
+    # Removes repetitions of words separated by a space.
+    sub = DeepSub(pattern1=r"\b(\w+)( \1\b)+", repl=r"\1", flags=2)
+    text = sub.sub(text)
+    return text
+
+
+def remove_ntr(text: str) -> str:
+    """Remove \n, \r and \t from `text`."""
+    return text.replace("\n", " ").replace("\t", " ").replace("\r", " ")
+
+
+def adjust_spacing(text: str) -> str:
+    """Adjust spacing."""
+    # Create spacing around punctuation 
+    create_spaces = DeepSub(pattern1=r"([^\w\d\s]+)", repl=r" \1 ", flags=2)
+    # Shrink multiple spacing
+    shrink_spaces = DeepSub(pattern1=r"(\s+)", repl=r" ", flags=2)
+    return shrink_spaces.sub(create_spaces.sub(text)).strip()
 
 
 def replace_equation(text: str, by: str = "equacao") -> str:
