@@ -119,6 +119,15 @@ def replace_url(text: str, by: str = " ") -> str:
     return pattern.sub(by, text)
 
 
+def replace_date(text: str, by: str = " ") -> str:
+    """Replace dates by `by`."""
+    pattern = re.compile(
+        r"(\d{2}\s?[\/\-]\s?\d{2}\s?[\/\-]\s?\d{2,4})",
+        flags=2
+    )
+    return pattern.sub(by, text)
+
+
 def remove_repetitions(text: str) -> str:
     """Remove repeating tokens in succession."""
     # Removes repetitions of non-alphanumerical chars.
@@ -149,6 +158,7 @@ def preprocess(text: str) -> str:
     ptext = replace_url(ptext)
     ptext = reformat_abbreviations(ptext)
     ptext = reformat_float(ptext)
+    ptext = replace_date(ptext)
     ptext = remove_repetitions(ptext)
     ptext = remove_ntr(ptext)
     return adjust_spacing(ptext)
