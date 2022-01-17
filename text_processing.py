@@ -1,4 +1,14 @@
+
+import argparse
+import os
 import re
+import sys
+
+from unicodedata import normalize as norm
+
+
+__doc__ = "Script for processing text files in Brazilian Portuguese."
+
 
 class DeepSub:
     
@@ -42,7 +52,7 @@ class DeepSub:
         self.__pos += 1
         if self.__pos == len(self.__pats) - 1:
             self.__pos = 0
-            return self.__pats[-1].sub(self.repl, match.groups()[0])        
+            return self.__pats[-1].sub(self.repl, match.groups()[0])
         return self.__pats[self.__pos].sub(self.__sub, match.groups()[0])
 
 
@@ -54,13 +64,13 @@ class DeepSub:
 
 def remove_bad_chars(text: str) -> str:
     """Remove chars alien to Brazilian Portuguese."""
-    
+
     symbols = "&#@=><\+\/\*\^"
     symbols += ",\.;:!?_\-"
     symbols += "\'\""
     symbols += "\)\(\]\[\}\{"
     symbols += "áâãàéêíóôõúç"
-    
+
     chars = re.compile(
         r"([^a-z\s0-9%s]+)" % symbols, flags=2
     )
@@ -69,35 +79,41 @@ def remove_bad_chars(text: str) -> str:
             norm("NFKD", match.groups()[0])
             .encode("ascii", errors="ignore")
             .decode("utf-8", errors="ignore"),
-        )    
+        )
     return chars.sub(_repl, text)
 
 
 def reformat_abbreviations(text: str) -> str:
-    """Reformat abbreviations."""
+    """
+    Reformat abbreviations. 
+    Ex.: U.S.A. becomes USA.
+    """
     pattern = DeepSub(pattern1="((:?[A-Z]+\.)+)", pattern2=r"(\.)", repl="", flags=0)
     return pattern.sub(text)
 
 
 def reformat_float(text: str) -> str:
-    """Reformat float numbers."""
+    """
+    Reformat float numbers.
+    Ex.: 27.345,90 becomes 2734590.
+    """
     pattern = DeepSub(pattern1=r"([0-9]*[,\.]*[0-9]+)", pattern2=r"([,\.]+)", repl="", flags=2)
     return pattern.sub(text)
 
 
 def replace_email(text: str, by: str = " ") -> str:
-    """Replace emails."""
+    """Replace emails by `by`."""
     pattern = re.compile(
-        r"([A-Z0-9_.+-]+@[A-Z0-9-]+(?:\.[A-Z0-9-]+)+)", 
+        r"([A-Z0-9_.+-]+@[A-Z0-9-]+(?:\.[A-Z0-9-]+)+)",
         flags=2
     )
     return pattern.sub(by, text)
 
 
 def replace_url(text: str, by: str = " ") -> str:
-    """Replace URLs."""
+    """Replace URLs by `by`."""
     pattern = re.compile(
-        r"(https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*))", 
+        r"((https?:\/\/)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*))",
         flags=2
     )
     return pattern.sub(by, text)
@@ -106,68 +122,64 @@ def replace_url(text: str, by: str = " ") -> str:
 def remove_repetitions(text: str) -> str:
     """Remove repeating tokens in succession."""
     # Removes repetitions of non-alphanumerical chars.
-    sub = DeepSub(pattern1=r"([^a-záâãàéêíóôõúç0-9\s])\1+", repl=r"\1", flags=2)
-    text = sub.sub(text)
+    ptext = DeepSub(pattern1=r"([^a-záâãàéêíóôõúç0-9\s])\1+", repl=r"\1", flags=2).sub(text)
     # Removes repetitions of words separated by a space.
-    sub = DeepSub(pattern1=r"\b(\w+)( \1\b)+", repl=r"\1", flags=2)
-    text = sub.sub(text)
-    return text
+    ptext = DeepSub(pattern1=r"\b(\w+)( \1\b)+", repl=r"\1", flags=2).sub(ptext)
+    return ptext
 
 
 def remove_ntr(text: str) -> str:
     """Remove \n, \r and \t from `text`."""
-    return text.replace("\n", " ").replace("\t", " ").replace("\r", " ")
+    return text.replace("-\n", "").replace("\n", " ").replace("\t", " ").replace("\r", "")
 
 
 def adjust_spacing(text: str) -> str:
     """Adjust spacing."""
-    # Create spacing around punctuation 
+    # Create spacing around punctuation.
     create_spaces = DeepSub(pattern1=r"([^\w\d\s]+)", repl=r" \1 ", flags=2)
-    # Shrink multiple spacing
-    shrink_spaces = DeepSub(pattern1=r"(\s+)", repl=r" ", flags=2)
-    return shrink_spaces.sub(create_spaces.sub(text)).strip()
+    # Collapse multiple spaces into only one.
+    collapse_spaces = DeepSub(pattern1=r"(\s+)", repl=r" ", flags=2)
+    return collapse_spaces.sub(create_spaces.sub(text)).strip()
 
 
-def replace_equation(text: str, by: str = "equacao") -> str:
+def preprocess(text: str) -> str:
+    """Apply textual preprocessing to `text`."""
+    ptext = remove_bad_chars(text)
+    ptext = replace_email(ptext)
+    ptext = replace_url(ptext)
+    ptext = reformat_abbreviations(ptext)
+    ptext = reformat_float(ptext)
+    ptext = remove_repetitions(ptext)
+    ptext = remove_ntr(ptext)
+    return adjust_spacing(ptext)
 
-    def reduce_args(text):
-        cls = DeepSub(pattern1=r"(\([^\(\)]+\)|\{[^\{\}]+\}|\[[^\[\]]+\])+", repl="ARGS", flags=2)
-        result = cls.sub(text)
-        if result == text:
-            return text
-        return reduce_args(result)
 
-    def reduce_prod(text):
-        cls = DeepSub(pattern1=r"((:?[a-z0-9]+\s*[\*\^]+\s*[a-z0-9]+)+)", repl="PROD", flags=2)
-        result = cls.sub(text)
-        if result == text:
-            return text
-        return reduce_prod(result)
+def main() -> None:
 
-    def reduce_div(text):
-        cls = DeepSub(pattern1=r"((:?[a-z0-9]+\s*[\/]+\s*[a-z0-9]+)+)", repl="DIV", flags=2)
-        result = cls.sub(text)
-        if result == text:
-            return text
-        return reduce_div(result)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("files", nargs="+", help="Text files to process.")
+    args = parser.parse_args()
 
-    def reduce_add(text):
-        cls = DeepSub(pattern1=r"((:?[a-z0-9]+\s*[\+\-]+\s*[a-z0-9]+)+)", repl="ADD", flags=2)
-        result = cls.sub(text)
-        if result == text:
-            return text
-        return reduce_add(result)
+    for _, files in vars(args).items():
+        break
 
-    def reduce_equation(text):
-        cls = DeepSub(pattern1=r"((:?[a-z0-9]+\s*[><=]+\s*[a-z0-9]+)+)", repl=by, flags=2)
-        result = cls.sub(text)
-        if result == text:
-            return text
-        return reduce_equation(result)
-    
-    red_text = reduce_equation(reduce_add(reduce_div(reduce_prod(reduce_args(text)))))
-    
-    if by in red_text:
-        return red_text
-    
-    return text
+    if len(files) and not os.path.exists("__preprocessed_texts__"):
+        os.makedirs("__preprocessed_texts__")
+
+    for file in set(files):
+        with open(file, "r") as rfile:
+            content = rfile.read()
+        prep_content = preprocess(content)
+        filename, ext = os.path.splitext(file)
+        with open(os.path.join("__preprocessed_texts__", f"prep_{filename}.txt"), "w+") as wfile:
+            wfile.write(prep_content)
+
+
+if __name__ == "__main__":
+
+    try:
+        main()
+    except:
+        sys.exit(0)
+
+    sys.exit(1)
