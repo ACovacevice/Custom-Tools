@@ -139,7 +139,8 @@ def remove_repetitions(text: str) -> str:
 
 def remove_ntr(text: str) -> str:
     """Remove \n, \r and \t from `text`."""
-    return text.replace("-\n", "").replace("\n", " ").replace("\t", " ").replace("\r", "")
+    sub = DeepSub(pattern1=r"(:?(\-+[\n\r]+)+)", pattern2=r"([\-\n\r]+)", repl=r"")
+    return sub.sub(text).replace("\r", " ").replace("\n", " ").replace("\t", " ")
 
 
 def adjust_spacing(text: str) -> str:
